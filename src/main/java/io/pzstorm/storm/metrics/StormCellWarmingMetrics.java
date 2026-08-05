@@ -3,6 +3,7 @@ package io.pzstorm.storm.metrics;
 import io.prometheus.metrics.core.metrics.Counter;
 import io.prometheus.metrics.core.metrics.Gauge;
 import io.prometheus.metrics.core.metrics.Histogram;
+import io.pzstorm.storm.patch.performance.StormCellWarmingConfig;
 
 /**
  * Prometheus instruments for Storm's cell warming feature (see {@code
@@ -13,8 +14,11 @@ import io.prometheus.metrics.core.metrics.Histogram;
  *   <li>{@code storm_cell_rewarmed_total} — cells re-attached from the warm map (avoided disk read
  *       + binary parse + RecalcAll2).
  *   <li>{@code storm_cell_warm_count} — current number of warm cells held in memory.
+ *   <li>{@code storm_cell_max_warm_cells} — configured bound on the warm set ({@code
+ *       Storm.MaxWarmCells} sandbox option, or {@code -Dstorm.cells.maxWarm} when that flag pins
+ *       it; {@code <= 0} = unbounded, flag-forced only).
  *   <li>{@code storm_cell_warm_evicted_total} — warm cells destructively unloaded because the warm
- *       set exceeded {@code -Dstorm.cells.maxWarm}.
+ *       set exceeded the configured bound.
  *   <li>{@code storm_cell_warm_eligibility_fail_total} — cells that fell through to vanilla unload
  *       because the eligibility predicate rejected them, labelled by {@code reason}.
  *   <li>{@code storm_cell_warm_duration_seconds} — time a cell spent in warm state before either
@@ -47,12 +51,24 @@ public final class StormCellWarmingMetrics {
                     .help("Current number of cells held warm in memory.")
                     .register(StormPrometheus.registry());
 
+    private static final Gauge MAX_WARM_CELLS =
+            Gauge.builder()
+                    .name("storm_cell_max_warm_cells")
+                    .help(
+                            "Configured bound on the warm-cell set. Sourced from the"
+                                    + " Storm.MaxWarmCells sandbox option, unless"
+                                    + " -Dstorm.cells.maxWarm pins it (the launch flag always"
+                                    + " wins). Values <= 0 mean unbounded and can only come from"
+                                    + " the launch flag. Compare against storm_cell_warm_count.")
+                    .register(StormPrometheus.registry());
+
     private static final Counter CELLS_EVICTED =
             Counter.builder()
                     .name("storm_cell_warm_evicted_total")
                     .help(
                             "Warm cells destructively unloaded because the warm set exceeded"
-                                    + " -Dstorm.cells.maxWarm.")
+                                    + " the configured bound (Storm.MaxWarmCells sandbox option or"
+                                    + " -Dstorm.cells.maxWarm launch flag).")
                     .register(StormPrometheus.registry());
 
     private static final Counter ELIGIBILITY_FAILS =
@@ -91,10 +107,20 @@ public final class StormCellWarmingMetrics {
                     .nativeOnly()
                     .register(StormPrometheus.registry());
 
+    static {
+        // Reflect the seeded bound (compiled default or -Dstorm.cells.maxWarm) before the sandbox
+        // applier has run — a scrape must never report a bound the eviction pass is not using.
+        MAX_WARM_CELLS.set(StormCellWarmingConfig.maxWarmCells());
+    }
+
     private StormCellWarmingMetrics() {}
 
     public static void incCellsWarmed() {
         CELLS_WARMED.inc();
+    }
+
+    public static void setMaxWarmCells(int max) {
+        MAX_WARM_CELLS.set(max);
     }
 
     public static void incCellsRewarmed() {

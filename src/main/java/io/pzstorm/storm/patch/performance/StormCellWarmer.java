@@ -66,6 +66,14 @@ public final class StormCellWarmer {
     // StormCellWarmingConfig.maxWarmCells().
     private static final Map<Long, WarmCell> WARM_CELLS = new LinkedHashMap<>();
 
+    // Ceiling on evictions per postupdate call. Steady-state overflow is a trickle (cells warm as
+    // players walk away), but a live Storm.MaxWarmCells decrease can put the set hundreds over
+    // budget in one tick, and each eviction is a full chunk reconnect + destructive Unload with
+    // save-job scheduling — draining the whole surplus at once would stall the tick. The excess
+    // drains at up to this many cells per tick instead (~80 cells/s at vanilla 10 TPS).
+    private static final int MAX_EVICTIONS_PER_TICK =
+            Integer.getInteger("storm.cells.maxWarmEvictionsPerTick", 8);
+
     // Identity-backed set of every animal currently inside a warmed cell. Maintained alongside
     // WARM_CELLS by drainAnimals / restoreAnimals so MovingObjectSchedulerBucketAddAdvice can
     // skip a warm animal at the bucket-add chokepoint without iterating WARM_CELLS each frame.
@@ -378,6 +386,10 @@ public final class StormCellWarmer {
      * vanilla destructive path: reconnect + restore first, so the pop managers virtualize animals
      * and the chunk save jobs persist state exactly as a vanilla Unload of a live cell would.
      *
+     * <p>The bound is re-read from the config every call, so a live {@code Storm.MaxWarmCells}
+     * sandbox push takes effect on the next tick; a decrease below the current warm count drains
+     * the surplus at up to {@link #MAX_EVICTIONS_PER_TICK} cells per tick.
+     *
      * <p>Everything still in {@code WARM_CELLS} at this point was not relevant this tick (relevant
      * cells were rewarmed by the caller's loop), so evicting the oldest is always safe.
      *
@@ -388,8 +400,8 @@ public final class StormCellWarmer {
         if (max <= 0) {
             return pathfindPaused;
         }
-        boolean evicted = false;
-        while (WARM_CELLS.size() > max) {
+        int evicted = 0;
+        while (WARM_CELLS.size() > max && evicted < MAX_EVICTIONS_PER_TICK) {
             Iterator<WarmCell> it = WARM_CELLS.values().iterator();
             WarmCell oldest = it.next();
             it.remove();
@@ -415,12 +427,12 @@ public final class StormCellWarmer {
             cell.Unload();
             serverMap.cellMap[y * width + x] = null;
             serverMap.loadedCells.remove(cell);
-            evicted = true;
+            evicted++;
             StormCellWarmingMetrics.incCellsEvicted();
             StormCellWarmingMetrics.recordWarmDurationNanos(
                     System.nanoTime() - oldest.warmedAtNanos);
         }
-        if (evicted) {
+        if (evicted > 0) {
             StormCellWarmingMetrics.setWarmCount(WARM_CELLS.size());
         }
         return pathfindPaused;

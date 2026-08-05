@@ -44,3 +44,6 @@ option Storm.ReapStalledConnectionSeconds
 
 option Storm.ZombieSightVehicleFastPath
 {type = boolean, default = true, page = Storm, translation = Storm_ZombieSightVehicleFastPath,}
+
+option Storm.MaxWarmCells
+{type = integer, min = 1, max = 256, default = 64, page = Storm, translation = Storm_MaxWarmCells,}

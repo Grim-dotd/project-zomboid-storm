@@ -14,6 +14,7 @@ import io.pzstorm.storm.patch.networking.GameServerTickRatePatch.UpdateLimitFact
 import io.pzstorm.storm.patch.networking.ServerFpsConfig;
 import io.pzstorm.storm.patch.performance.AnimalLOSTickInterval;
 import io.pzstorm.storm.patch.performance.InventoryItemSweepTickInterval;
+import io.pzstorm.storm.patch.performance.StormCellWarmingConfig;
 import io.pzstorm.storm.patch.performance.StormZombieCullConfig;
 import io.pzstorm.storm.patch.performance.VirtualAnimalTickInterval;
 import io.pzstorm.storm.patch.performance.ZombieAuthTickInterval;
@@ -55,6 +56,7 @@ public final class StormPerformanceSandboxApplier {
             "Storm.ReapStalledConnectionSeconds";
     public static final String OPT_ZOMBIE_SIGHT_VEHICLE_FAST_PATH =
             "Storm.ZombieSightVehicleFastPath";
+    public static final String OPT_MAX_WARM_CELLS = "Storm.MaxWarmCells";
 
     /** Set on the first legitimately-early {@link #applyServerFps()} skip at boot. */
     private static boolean serverFpsSkippedOnce;
@@ -97,6 +99,23 @@ public final class StormPerformanceSandboxApplier {
         applyScreenshotEncodeKbPerTick();
         applyReapStalledConnectionSeconds();
         applyZombieSightVehicleFastPath();
+        applyMaxWarmCells();
+    }
+
+    /**
+     * Pushes {@link #OPT_MAX_WARM_CELLS} through {@link
+     * StormCellWarmingConfig#setMaxWarmCellsFromSandbox(int)}, which itself defers to {@code
+     * -Dstorm.cells.maxWarm} when that launch flag is set. The bound is re-read every tick by the
+     * warm-set eviction pass, so an admin push that lowers it below the current warm count drains
+     * the surplus without a restart. Inert (option applied but never consulted) unless the server
+     * runs with {@code -Dstorm.cells.keepWarm=true}.
+     */
+    private static void applyMaxWarmCells() {
+        Integer value = readIntOption(OPT_MAX_WARM_CELLS);
+        if (value == null) {
+            return;
+        }
+        StormCellWarmingConfig.setMaxWarmCellsFromSandbox(value);
     }
 
     /**
