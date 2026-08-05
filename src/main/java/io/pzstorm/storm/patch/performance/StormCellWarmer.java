@@ -56,6 +56,14 @@ import zombie.popman.ZombiePopulationManager;
  * least-recently-warm cells are restored and destructively unloaded via the vanilla path (see
  * {@link #evictOverBudget(ServerMap, boolean)}).
  *
+ * <p>Save durability: warm cells save correctly with no special handling. Chunk bytes never contain
+ * live animals ({@code IsoGridSquare.save} writes static objects and dead bodies only), so the
+ * drained {@code movingObjects} lists are invisible to {@code SaveAll}; live animals persist
+ * through {@code AnimalPopulationManager.save()}, which collects them from {@code
+ * IsoWorld.currentCell}'s object list — and {@link #drainAnimals} deliberately leaves stashed
+ * animals in that list (see the invariant comment there). Drained dead bodies stay square-attached,
+ * so chunk bytes carry them with their ObjectID intact.
+ *
  * <p>Gated server-side on {@link StormCellWarmingConfig#isEnabled()}, which is live ({@code
  * Storm.CellWarming} sandbox option). A live disable must not strand warm cells — they sit in
  * {@code cellMap}/{@code loadedCells} with disconnected chunks and drained animals, and a vanilla
@@ -506,6 +514,11 @@ public final class StormCellWarmer {
         if (sm == null) {
             return "no_server_map";
         }
+        // Weaker than it looks: preupdate clears queuedSaveAll before invoking the save, so
+        // during an actual SaveAll this reads false and cells can warm again in the same tick's
+        // postupdate. That is safe — saving never depends on warm state (see the save-durability
+        // paragraph in the class javadoc) — so this guard only avoids pointless warm/unload churn
+        // around the moment a save or quit is queued; it is not what makes saving correct.
         if (sm.queuedQuit || sm.queuedSaveAll) {
             return "save_or_quit_queued";
         }
@@ -520,6 +533,14 @@ public final class StormCellWarmer {
         return null;
     }
 
+    // DURABILITY INVARIANT — stashed animals must remain in IsoCell.objectList. Live animals are
+    // never serialized into chunk bytes; the only thing that persists them is
+    // AnimalPopulationManager.save() iterating IsoWorld.currentCell.getObjectList()
+    // (AnimalManagerMain.saveRealAnimals), which runs on every QueuedSaveAll and at quit. This
+    // drain therefore detaches ONLY the square binding (setMovingSquare(null) removes the animal
+    // from sq.movingObjects) and must never call animal.removeFromWorld() — that is the one call
+    // that removes from objectList, and adding it here would make the stash RAM-only, silently
+    // losing every warm animal on the next save + restart.
     private static void drainAnimals(IsoChunk chunk, List<WarmAnimal> sink) {
         for (int z = chunk.getMinLevel(); z <= chunk.getMaxLevel(); z++) {
             int zIdx = chunk.squaresIndexOfLevel(z);
