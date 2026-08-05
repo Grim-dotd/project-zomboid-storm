@@ -20,7 +20,8 @@ import io.pzstorm.storm.metrics.StormCellWarmingMetrics;
  *       Enabling live starts warming on the next {@code ServerMap.postupdate} tick; disabling live
  *       stops new warms and drains the existing warm set through the vanilla destructive unload
  *       path (throttled — see {@code StormCellWarmer#evictOverBudget}). The warm-path advices stay
- *       engaged until the drain completes, gated on {@code isEnabled() || warmCount() > 0}.
+ *       engaged until the drain completes, gated on {@code isEnabled() || warmCellCount() > 0} (the
+ *       warm-set size mirrored into this class — see {@link #warmCellCount()}).
  *   <li>{@code Storm.MaxWarmCells} feeds {@link #setMaxWarmCellsFromSandbox(int)}; the eviction
  *       pass re-reads {@link #maxWarmCells()} every tick. A warm cell keeps its full chunk/square
  *       state resident, so without a cap the warm set grows with every cell any player has ever
@@ -93,6 +94,14 @@ public final class StormCellWarmingConfig {
      */
     private static volatile int currentMaxWarmCells =
             MAX_WARM_PROPERTY != null ? MAX_WARM_PROPERTY : DEFAULT_MAX_WARM_CELLS;
+
+    /**
+     * Mirror of {@code StormCellWarmer}'s warm-set size, stored via {@link
+     * #setWarmCellCountFromWarmer(int)} at every warm-set mutation. Starts at 0 to match the empty
+     * warm set. Volatile — the warmer publishes from the server main thread and the advices may
+     * read from other threads.
+     */
+    private static volatile int liveWarmCellCount;
 
     private StormCellWarmingConfig() {}
 
@@ -206,5 +215,25 @@ public final class StormCellWarmingConfig {
     /** Test-only — overrides the live bound without clamping, logging, or gauge push. */
     static void setMaxWarmCellsForTest(int value) {
         currentMaxWarmCells = value;
+    }
+
+    /**
+     * Size of {@code StormCellWarmer}'s warm set, mirrored into this class by the warmer at every
+     * warm-set mutation. The warm-path advices test "is warming in play" as {@code isEnabled() ||
+     * warmCellCount() > 0} against this mirror instead of touching {@code StormCellWarmer}, whose
+     * class initializer reflects on {@code ServerMap.ServerCell} — servers that never warm must
+     * never be forced to load it.
+     */
+    public static int warmCellCount() {
+        return liveWarmCellCount;
+    }
+
+    /**
+     * Called by {@code StormCellWarmer} (the dependency direction is warmer -> config) at every
+     * warm-set mutation to keep the mirror current. Stores only — no clamping, no logging; the
+     * warmer pushes the Prometheus gauge alongside this.
+     */
+    static void setWarmCellCountFromWarmer(int count) {
+        liveWarmCellCount = count;
     }
 }

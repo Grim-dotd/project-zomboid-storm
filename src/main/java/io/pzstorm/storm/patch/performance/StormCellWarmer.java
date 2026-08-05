@@ -60,12 +60,13 @@ import zombie.popman.ZombiePopulationManager;
  * Storm.CellWarming} sandbox option). A live disable must not strand warm cells — they sit in
  * {@code cellMap}/{@code loadedCells} with disconnected chunks and drained animals, and a vanilla
  * {@code Unload} on that state would lose the stash — so the warm-path advices stay engaged while
- * {@code isEnabled() || warmCount() > 0}, and {@link #runPostUpdate(ServerMap)} keeps running in
- * drain mode: no new warms ({@link #ineligibleReason} reports {@code disabled}), relevant warm
- * cells still {@link #rewarm} normally, and {@link #evictOverBudget} treats the budget as zero so
- * the remainder drains through the vanilla destructive path at the throttled rate. Once the warm
- * set empties, the advices fall through to vanilla wholesale. Single-threaded — all calls happen
- * from the server main thread.
+ * {@code isEnabled() || warmCellCount() > 0} (the size mirror {@link #publishWarmCount()} maintains
+ * on {@link StormCellWarmingConfig}), and {@link #runPostUpdate(ServerMap)} keeps running in drain
+ * mode: no new warms ({@link #ineligibleReason} reports {@code disabled}), relevant warm cells
+ * still {@link #rewarm} normally, and {@link #evictOverBudget} treats the budget as zero so the
+ * remainder drains through the vanilla destructive path at the throttled rate. Once the warm set
+ * empties, the advices fall through to vanilla wholesale. Single-threaded — all calls happen from
+ * the server main thread.
  */
 public final class StormCellWarmer {
 
@@ -158,8 +159,24 @@ public final class StormCellWarmer {
         return WARM_CELLS.containsKey(key(cell.wx, cell.wy));
     }
 
+    /**
+     * Live size of the warm set. Advices must NOT use this for their fast-path gate — they read
+     * {@link StormCellWarmingConfig#warmCellCount()} instead, so the gate never forces this class
+     * (whose initializer reflects on {@code ServerMap.ServerCell}) to load on servers that never
+     * warm.
+     */
     public static int warmCount() {
         return WARM_CELLS.size();
+    }
+
+    /**
+     * Single publish point for the warm-set size — updates the config mirror (read by the advices'
+     * fast-path gate) and the Prometheus gauge together so they cannot drift.
+     */
+    private static void publishWarmCount() {
+        int size = WARM_CELLS.size();
+        StormCellWarmingConfig.setWarmCellCountFromWarmer(size);
+        StormCellWarmingMetrics.setWarmCount(size);
     }
 
     /**
@@ -329,7 +346,7 @@ public final class StormCellWarmer {
 
         WARM_CELLS.put(key(cell.wx, cell.wy), new WarmCell(cell, now, animals, deadBodies));
         StormCellWarmingMetrics.incCellsWarmed();
-        StormCellWarmingMetrics.setWarmCount(WARM_CELLS.size());
+        publishWarmCount();
         StormCellWarmingMetrics.recordWarmOpNanos(System.nanoTime() - now);
         return true;
     }
@@ -362,7 +379,7 @@ public final class StormCellWarmer {
             StormCellWarmingMetrics.incCellsRewarmed();
             StormCellWarmingMetrics.recordWarmDurationNanos(opEnd - warm.warmedAtNanos);
             StormCellWarmingMetrics.recordRewarmOpNanos(opEnd - opStart);
-            StormCellWarmingMetrics.setWarmCount(WARM_CELLS.size());
+            publishWarmCount();
             return true;
         } catch (Throwable t) {
             StormLogger.LOGGER.error(
@@ -371,7 +388,7 @@ public final class StormCellWarmer {
                     cell.wy,
                     t);
             WARM_CELLS.put(key(cell.wx, cell.wy), warm);
-            StormCellWarmingMetrics.setWarmCount(WARM_CELLS.size());
+            publishWarmCount();
             return false;
         }
     }
@@ -451,7 +468,7 @@ public final class StormCellWarmer {
                     System.nanoTime() - oldest.warmedAtNanos);
         }
         if (evicted > 0) {
-            StormCellWarmingMetrics.setWarmCount(WARM_CELLS.size());
+            publishWarmCount();
         }
         return pathfindPaused;
     }

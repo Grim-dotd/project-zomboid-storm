@@ -20,9 +20,10 @@ import zombie.popman.LoadedAreas;
  * even when those areas overlap warm cells.
  *
  * <p>Server-only via {@code GameServer.server} gate. The warming fast-path gate is {@code
- * isEnabled() || warmCount() > 0}, not {@code isEnabled()} alone: {@code Storm.CellWarming} is
- * live, and cells still warm after a disable must stay filtered out of the native pop manager's
- * loaded-server-cells report until they drain or rewarm.
+ * isEnabled() || warmCellCount() > 0} (a count mirrored into the config class so this gate never
+ * forces {@code StormCellWarmer} to class-load on servers that never warm), not {@code isEnabled()}
+ * alone: {@code Storm.CellWarming} is live, and cells still warm after a disable must stay filtered
+ * out of the native pop manager's loaded-server-cells report until they drain or rewarm.
  */
 public class LoadedAreasAddAdvice {
 
@@ -44,7 +45,7 @@ public class LoadedAreasAddAdvice {
         if (!GameServer.server) {
             return 0;
         }
-        if (!StormCellWarmingConfig.isEnabled() && StormCellWarmer.warmCount() == 0) {
+        if (!StormCellWarmingConfig.isEnabled() && StormCellWarmingConfig.warmCellCount() == 0) {
             return 0;
         }
         boolean serverCells;

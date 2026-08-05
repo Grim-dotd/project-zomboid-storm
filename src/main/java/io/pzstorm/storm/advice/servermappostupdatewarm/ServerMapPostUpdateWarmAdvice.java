@@ -12,12 +12,13 @@ import zombie.network.ServerMap;
  * resident in {@code cellMap}/{@code loadedCells} instead of being destructively unloaded. When
  * warming is disabled and no warm cells remain, returns 0 to let vanilla run unchanged.
  *
- * <p>The gate is {@code isEnabled() || warmCount() > 0}, not {@code isEnabled()} alone: {@code
- * Storm.CellWarming} is live, and a disable while cells are warm must keep the warm-aware loop in
- * charge until the drain finishes — vanilla postupdate would {@code Unload()} warm cells without
- * reconnecting their chunks or restoring their animal/dead-body stash. In that draining state
- * {@code runPostUpdate} warms nothing new and evicts the warm set down to zero, after which this
- * advice falls through to vanilla.
+ * <p>The gate is {@code isEnabled() || warmCellCount() > 0} (a count mirrored into the config class
+ * so this gate never forces {@code StormCellWarmer} to class-load on servers that never warm), not
+ * {@code isEnabled()} alone: {@code Storm.CellWarming} is live, and a disable while cells are warm
+ * must keep the warm-aware loop in charge until the drain finishes — vanilla postupdate would
+ * {@code Unload()} warm cells without reconnecting their chunks or restoring their animal/dead-body
+ * stash. In that draining state {@code runPostUpdate} warms nothing new and evicts the warm set
+ * down to zero, after which this advice falls through to vanilla.
  *
  * <p>Stacks under the existing {@code ServerMapPostUpdateAdvice} timing wrapper — both advices'
  * enter/exit hooks fire regardless of body skip, so per-tick timings continue to record the elapsed
@@ -30,7 +31,7 @@ public class ServerMapPostUpdateWarmAdvice {
         if (!GameServer.server) {
             return 0;
         }
-        if (!StormCellWarmingConfig.isEnabled() && StormCellWarmer.warmCount() == 0) {
+        if (!StormCellWarmingConfig.isEnabled() && StormCellWarmingConfig.warmCellCount() == 0) {
             return 0;
         }
         if (!(thisObj instanceof ServerMap serverMap)) {

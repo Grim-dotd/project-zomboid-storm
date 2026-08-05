@@ -17,20 +17,24 @@ class StormCellWarmingConfigTest implements UnitTest {
 
     private boolean savedEnabled;
     private int savedMaxWarmCells;
+    private int savedWarmCellCount;
 
     @BeforeEach
     void captureState() {
         savedEnabled = StormCellWarmingConfig.isEnabled();
         savedMaxWarmCells = StormCellWarmingConfig.maxWarmCells();
+        savedWarmCellCount = StormCellWarmingConfig.warmCellCount();
         StormCellWarmingConfig.setEnabledForTest(StormCellWarmingConfig.DEFAULT_ENABLED);
         StormCellWarmingConfig.setMaxWarmCellsForTest(
                 StormCellWarmingConfig.DEFAULT_MAX_WARM_CELLS);
+        StormCellWarmingConfig.setWarmCellCountFromWarmer(0);
     }
 
     @AfterEach
     void restoreState() {
         StormCellWarmingConfig.setEnabledForTest(savedEnabled);
         StormCellWarmingConfig.setMaxWarmCellsForTest(savedMaxWarmCells);
+        StormCellWarmingConfig.setWarmCellCountFromWarmer(savedWarmCellCount);
     }
 
     // -------- setEnabledFromSandbox() --------
@@ -148,5 +152,23 @@ class StormCellWarmingConfigTest implements UnitTest {
         int inEffect = StormCellWarmingConfig.setMaxWarmCellsFromSandbox(64, true);
         assertEquals(0, inEffect);
         assertEquals(0, StormCellWarmingConfig.maxWarmCells());
+    }
+
+    // -------- warmCellCount mirror --------
+
+    @Test
+    void warmCellCountReflectsWarmerPublishes() {
+        StormCellWarmingConfig.setWarmCellCountFromWarmer(3);
+        assertEquals(3, StormCellWarmingConfig.warmCellCount());
+        StormCellWarmingConfig.setWarmCellCountFromWarmer(0);
+        assertEquals(0, StormCellWarmingConfig.warmCellCount());
+    }
+
+    @Test
+    void warmCellCountStartsAtZeroContract() {
+        // Documents the empty-set invariant the advices rely on: with no warmer publishes the
+        // mirror reads 0, so a never-warming server's fast path stays isEnabled() alone and
+        // StormCellWarmer is never class-loaded.
+        assertEquals(0, StormCellWarmingConfig.warmCellCount());
     }
 }
