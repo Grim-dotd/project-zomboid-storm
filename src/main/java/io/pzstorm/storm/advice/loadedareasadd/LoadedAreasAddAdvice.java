@@ -19,7 +19,10 @@ import zombie.popman.LoadedAreas;
  * instance (serverCells=false) and are left untouched — players need their relevant areas reported
  * even when those areas overlap warm cells.
  *
- * <p>Server-only via {@code GameServer.server} gate.
+ * <p>Server-only via {@code GameServer.server} gate. The warming fast-path gate is {@code
+ * isEnabled() || warmCount() > 0}, not {@code isEnabled()} alone: {@code Storm.CellWarming} is
+ * live, and cells still warm after a disable must stay filtered out of the native pop manager's
+ * loaded-server-cells report until they drain or rewarm.
  */
 public class LoadedAreasAddAdvice {
 
@@ -41,7 +44,7 @@ public class LoadedAreasAddAdvice {
         if (!GameServer.server) {
             return 0;
         }
-        if (!StormCellWarmingConfig.isEnabled()) {
+        if (!StormCellWarmingConfig.isEnabled() && StormCellWarmer.warmCount() == 0) {
             return 0;
         }
         boolean serverCells;

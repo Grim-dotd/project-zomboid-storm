@@ -56,6 +56,7 @@ public final class StormPerformanceSandboxApplier {
             "Storm.ReapStalledConnectionSeconds";
     public static final String OPT_ZOMBIE_SIGHT_VEHICLE_FAST_PATH =
             "Storm.ZombieSightVehicleFastPath";
+    public static final String OPT_CELL_WARMING = "Storm.CellWarming";
     public static final String OPT_MAX_WARM_CELLS = "Storm.MaxWarmCells";
 
     /** Set on the first legitimately-early {@link #applyServerFps()} skip at boot. */
@@ -99,7 +100,24 @@ public final class StormPerformanceSandboxApplier {
         applyScreenshotEncodeKbPerTick();
         applyReapStalledConnectionSeconds();
         applyZombieSightVehicleFastPath();
+        applyCellWarming();
         applyMaxWarmCells();
+    }
+
+    /**
+     * Pushes {@link #OPT_CELL_WARMING} through {@link
+     * StormCellWarmingConfig#setEnabledFromSandbox(boolean)}, which itself defers to {@code
+     * -Dstorm.cells.keepWarm} when that launch flag is present. Live in both directions: enabling
+     * takes effect on the next {@code ServerMap.postupdate} tick; disabling stops new warms and the
+     * warm-path advices drain the existing warm set through the vanilla unload path before standing
+     * down.
+     */
+    private static void applyCellWarming() {
+        Boolean value = readBooleanOption(OPT_CELL_WARMING);
+        if (value == null) {
+            return;
+        }
+        StormCellWarmingConfig.setEnabledFromSandbox(value);
     }
 
     /**
@@ -107,8 +125,8 @@ public final class StormPerformanceSandboxApplier {
      * StormCellWarmingConfig#setMaxWarmCellsFromSandbox(int)}, which itself defers to {@code
      * -Dstorm.cells.maxWarm} when that launch flag is set. The bound is re-read every tick by the
      * warm-set eviction pass, so an admin push that lowers it below the current warm count drains
-     * the surplus without a restart. Inert (option applied but never consulted) unless the server
-     * runs with {@code -Dstorm.cells.keepWarm=true}.
+     * the surplus without a restart. Inert (option applied but never consulted) unless cell warming
+     * is on ({@link #OPT_CELL_WARMING} or the {@code -Dstorm.cells.keepWarm} launch flag).
      */
     private static void applyMaxWarmCells() {
         Integer value = readIntOption(OPT_MAX_WARM_CELLS);

@@ -1,6 +1,7 @@
 package io.pzstorm.storm.patch.performance;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import io.pzstorm.storm.UnitTest;
@@ -8,22 +9,77 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
-/** Verifies the live warm-set bound setter fed by the {@code Storm.MaxWarmCells} sandbox option. */
+/**
+ * Verifies the live cell-warming setters fed by the {@code Storm.CellWarming} and {@code
+ * Storm.MaxWarmCells} sandbox options.
+ */
 class StormCellWarmingConfigTest implements UnitTest {
 
+    private boolean savedEnabled;
     private int savedMaxWarmCells;
 
     @BeforeEach
     void captureState() {
+        savedEnabled = StormCellWarmingConfig.isEnabled();
         savedMaxWarmCells = StormCellWarmingConfig.maxWarmCells();
+        StormCellWarmingConfig.setEnabledForTest(StormCellWarmingConfig.DEFAULT_ENABLED);
         StormCellWarmingConfig.setMaxWarmCellsForTest(
                 StormCellWarmingConfig.DEFAULT_MAX_WARM_CELLS);
     }
 
     @AfterEach
     void restoreState() {
+        StormCellWarmingConfig.setEnabledForTest(savedEnabled);
         StormCellWarmingConfig.setMaxWarmCellsForTest(savedMaxWarmCells);
     }
+
+    // -------- setEnabledFromSandbox() --------
+
+    @Test
+    void warmingShipsDisabled() {
+        // Off-by-default is the compatibility contract: servers keep vanilla unload semantics
+        // until an admin opts in via the option or the launch flag.
+        assertFalse(StormCellWarmingConfig.DEFAULT_ENABLED);
+    }
+
+    @Test
+    void enableFromSandboxAppliesAndPersists() {
+        assertTrue(StormCellWarmingConfig.setEnabledFromSandbox(true, false));
+        assertTrue(StormCellWarmingConfig.isEnabled());
+    }
+
+    @Test
+    void disableFromSandboxAppliesAndPersists() {
+        StormCellWarmingConfig.setEnabledForTest(true);
+        assertFalse(StormCellWarmingConfig.setEnabledFromSandbox(false, false));
+        assertFalse(StormCellWarmingConfig.isEnabled());
+    }
+
+    @Test
+    void enableFromSandboxIsIdempotent() {
+        StormCellWarmingConfig.setEnabledForTest(true);
+        assertTrue(StormCellWarmingConfig.setEnabledFromSandbox(true, false));
+        assertTrue(StormCellWarmingConfig.isEnabled());
+    }
+
+    @Test
+    void launchFlagPinsEnabledOnAgainstSandboxDisable() {
+        StormCellWarmingConfig.setEnabledForTest(true);
+        assertTrue(
+                StormCellWarmingConfig.setEnabledFromSandbox(false, true),
+                "forced-by-property apply must return the pinned state");
+        assertTrue(StormCellWarmingConfig.isEnabled(), "pinned state must not change");
+    }
+
+    @Test
+    void launchFlagPinsEnabledOffAgainstSandboxEnable() {
+        // -Dstorm.cells.keepWarm=false is an explicit operator choice — presence pins both ways.
+        StormCellWarmingConfig.setEnabledForTest(false);
+        assertFalse(StormCellWarmingConfig.setEnabledFromSandbox(true, true));
+        assertFalse(StormCellWarmingConfig.isEnabled());
+    }
+
+    // -------- setMaxWarmCellsFromSandbox() --------
 
     @Test
     void defaultSitsInsideSandboxBounds() {

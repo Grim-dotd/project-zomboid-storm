@@ -56,8 +56,16 @@ import zombie.popman.ZombiePopulationManager;
  * least-recently-warm cells are restored and destructively unloaded via the vanilla path (see
  * {@link #evictOverBudget(ServerMap, boolean)}).
  *
- * <p>Gated server-side on {@link StormCellWarmingConfig#isEnabled()}. Single-threaded — all calls
- * happen from the server main thread.
+ * <p>Gated server-side on {@link StormCellWarmingConfig#isEnabled()}, which is live ({@code
+ * Storm.CellWarming} sandbox option). A live disable must not strand warm cells — they sit in
+ * {@code cellMap}/{@code loadedCells} with disconnected chunks and drained animals, and a vanilla
+ * {@code Unload} on that state would lose the stash — so the warm-path advices stay engaged while
+ * {@code isEnabled() || warmCount() > 0}, and {@link #runPostUpdate(ServerMap)} keeps running in
+ * drain mode: no new warms ({@link #ineligibleReason} reports {@code disabled}), relevant warm
+ * cells still {@link #rewarm} normally, and {@link #evictOverBudget} treats the budget as zero so
+ * the remainder drains through the vanilla destructive path at the throttled rate. Once the warm
+ * set empties, the advices fall through to vanilla wholesale. Single-threaded — all calls happen
+ * from the server main thread.
  */
 public final class StormCellWarmer {
 
@@ -177,7 +185,9 @@ public final class StormCellWarmer {
      * </ul>
      *
      * Called from {@code ServerMapPostUpdateWarmAdvice} which short-circuits the vanilla method
-     * body when {@link StormCellWarmingConfig#isEnabled()}.
+     * body while {@link StormCellWarmingConfig#isEnabled()} or the warm set is non-empty. In the
+     * disabled-but-draining state the same loop runs, but {@link #warm} refuses new cells (reason
+     * {@code disabled}) and {@link #evictOverBudget} drains the warm set to zero.
      */
     public static void runPostUpdate(ServerMap serverMap) {
         boolean pathfindPaused = false;
@@ -388,7 +398,10 @@ public final class StormCellWarmer {
      *
      * <p>The bound is re-read from the config every call, so a live {@code Storm.MaxWarmCells}
      * sandbox push takes effect on the next tick; a decrease below the current warm count drains
-     * the surplus at up to {@link #MAX_EVICTIONS_PER_TICK} cells per tick.
+     * the surplus at up to {@link #MAX_EVICTIONS_PER_TICK} cells per tick. When warming has been
+     * live-disabled ({@code Storm.CellWarming = false}) the budget is zero regardless of the
+     * configured bound — including the flag-forced unbounded sentinel — so the whole warm set
+     * drains at the same throttled rate.
      *
      * <p>Everything still in {@code WARM_CELLS} at this point was not relevant this tick (relevant
      * cells were rewarmed by the caller's loop), so evicting the oldest is always safe.
@@ -396,9 +409,14 @@ public final class StormCellWarmer {
      * @return updated pathfindPaused flag — caller's finally block resumes ServerLOS.
      */
     private static boolean evictOverBudget(ServerMap serverMap, boolean pathfindPaused) {
-        int max = StormCellWarmingConfig.maxWarmCells();
-        if (max <= 0) {
-            return pathfindPaused;
+        int max;
+        if (!StormCellWarmingConfig.isEnabled()) {
+            max = 0;
+        } else {
+            max = StormCellWarmingConfig.maxWarmCells();
+            if (max <= 0) {
+                return pathfindPaused;
+            }
         }
         int evicted = 0;
         while (WARM_CELLS.size() > max && evicted < MAX_EVICTIONS_PER_TICK) {
@@ -459,6 +477,11 @@ public final class StormCellWarmer {
     }
 
     private static String ineligibleReason(ServerMap.ServerCell cell) {
+        if (!StormCellWarmingConfig.isEnabled()) {
+            // Live-disabled: the postupdate loop still runs while the warm set drains, but no
+            // new cell may enter it — irrelevant cold cells take the vanilla unload.
+            return "disabled";
+        }
         if (GameServer.softReset) {
             return "soft_reset";
         }

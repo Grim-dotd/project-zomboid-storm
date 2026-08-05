@@ -10,6 +10,9 @@ import io.pzstorm.storm.patch.performance.StormCellWarmingConfig;
  * io.pzstorm.storm.patch.performance.StormCellWarmingConfig}).
  *
  * <ul>
+ *   <li>{@code storm_cell_warming_enabled} — whether cell warming is active ({@code
+ *       Storm.CellWarming} sandbox option, or {@code -Dstorm.cells.keepWarm} when that flag pins
+ *       it). 1 = warming; 0 = vanilla unload semantics (any remaining warm cells drain).
  *   <li>{@code storm_cell_warmed_total} — cells transitioned to warm (Unload short-circuited).
  *   <li>{@code storm_cell_rewarmed_total} — cells re-attached from the warm map (avoided disk read
  *       + binary parse + RecalcAll2).
@@ -30,6 +33,18 @@ import io.pzstorm.storm.patch.performance.StormCellWarmingConfig;
  * </ul>
  */
 public final class StormCellWarmingMetrics {
+
+    private static final Gauge WARMING_ENABLED =
+            Gauge.builder()
+                    .name("storm_cell_warming_enabled")
+                    .help(
+                            "Whether cell warming is active. Sourced from the Storm.CellWarming"
+                                    + " sandbox option, unless -Dstorm.cells.keepWarm pins it (the"
+                                    + " launch flag always wins). 1 = cells leaving player"
+                                    + " relevance are kept warm; 0 = vanilla unload semantics —"
+                                    + " any warm cells left from a live disable drain through the"
+                                    + " vanilla destructive path (watch storm_cell_warm_count).")
+                    .register(StormPrometheus.registry());
 
     private static final Counter CELLS_WARMED =
             Counter.builder()
@@ -108,12 +123,17 @@ public final class StormCellWarmingMetrics {
                     .register(StormPrometheus.registry());
 
     static {
-        // Reflect the seeded bound (compiled default or -Dstorm.cells.maxWarm) before the sandbox
-        // applier has run — a scrape must never report a bound the eviction pass is not using.
+        // Reflect the seeded state (compiled defaults or -Dstorm.cells.* flags) before the sandbox
+        // applier has run — a scrape must never report config the warm path is not using.
+        WARMING_ENABLED.set(StormCellWarmingConfig.isEnabled() ? 1 : 0);
         MAX_WARM_CELLS.set(StormCellWarmingConfig.maxWarmCells());
     }
 
     private StormCellWarmingMetrics() {}
+
+    public static void setCellWarmingEnabled(boolean enabled) {
+        WARMING_ENABLED.set(enabled ? 1 : 0);
+    }
 
     public static void incCellsWarmed() {
         CELLS_WARMED.inc();
