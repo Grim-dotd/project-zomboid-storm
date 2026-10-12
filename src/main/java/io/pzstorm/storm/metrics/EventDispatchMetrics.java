@@ -37,6 +37,7 @@ public final class EventDispatchMetrics {
 
     static {
         GameTimeMetrics.ensureStarted();
+        FileDescriptorMetrics.ensureStarted();
     }
 
     private EventDispatchMetrics() {}

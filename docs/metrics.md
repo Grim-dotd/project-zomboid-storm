@@ -1344,6 +1344,38 @@ storm_zombie_id_pool_size / (storm_max_total_zombies > 0)
 | `storm_gameport_http_requests_total` | Counter | `method`, `path`, `status` | Same, for the game-port TCP server (`@GameHttpEndpoint` registry). |
 | `storm_gameport_http_request_duration_seconds` | Histogram (native) | `method`, `path` | Same, for the game-port TCP server. |
 
+#### File descriptors (FileDescriptorMetrics)
+
+The JVM's own `process_open_fds` gives one total. These gauges split that total by kind, so a descriptor surge can be traced to sockets, files, or pipes. A daemon thread (`StormFdSampler`) reads `/proc/self/fd` once a second and the gauges serve the latest sample, so a scrape costs nothing. Linux only. On Windows and macOS nothing is registered.
+
+`storm_process_highest_fd` is the gauge to alert on. Native code that calls `select()`, `steamclient.so` included, cannot watch a descriptor numbered 1024 or higher, and glibc aborts the process with `bit out of range 0 - FD_SETSIZE on fd_set` when it tries. Raising `ulimit -n` does not help, because the limit is the descriptor number and the `select()` bitmap is fixed at compile time.
+
+| Name | Type | Labels | What |
+|------|------|--------|------|
+| `storm_process_open_fds` | GaugeWithCallback | `type` | Open descriptors by kind. |
+| `storm_process_open_fds_peak` | GaugeWithCallback | `type` | Highest count of each kind since process start. |
+| `storm_process_highest_fd` | GaugeWithCallback | — | Highest descriptor number in use. |
+| `storm_process_highest_fd_peak` | GaugeWithCallback | — | Highest descriptor number seen since process start. |
+| `storm_process_tcp_connections` | GaugeWithCallback | `local_port` | TCP connections by the listening port that accepted them. Connections this process opened are under `local_port="outbound"`. |
+| `storm_process_open_files` | GaugeWithCallback | `extension` | Open regular files by extension. Extensions outside a fixed list are under `extension="other"`. |
+
+`type` values are `file`, `deleted`, `device`, `pipe`, `eventpoll`, `eventfd`, `anon_inode`, `socket_tcp`, `socket_tcp_listen`, `socket_udp`, `socket_other`, and `other`. A socket is matched to TCP or UDP by its inode in `/proc/net/{tcp,tcp6,udp,udp6}`. Unix-domain and netlink sockets land in `socket_other`.
+
+A surge can rise and kill the server between two scrapes, so the peaks are kept for the life of the process. For the same reason the sampler logs a WARN to the Storm log once the highest descriptor reaches 768, at most every 10 seconds. That line carries the counts by kind, TCP connections by port, open files by extension, and the ten directories holding the most open files. Search the log for `FileDescriptorMetrics: highest fd`.
+
+Loaded through `EventDispatchMetrics`'s static initializer (`FileDescriptorMetrics.ensureStarted()`), so sampling starts with the first dispatched event.
+
+```promql
+# distance to the select() abort, as a fraction; alert well before 1.0
+storm_process_highest_fd / 1024
+
+# which kind of descriptor is growing
+topk(3, deriv(storm_process_open_fds[5m]))
+
+# inbound connections piling up on one listening port
+storm_process_tcp_connections{local_port!="outbound"}
+```
+
 ## Gotchas
 
 - **Callback metrics fire on every scrape.** Keep callbacks cheap. `ThreadAllocBytesMetrics` skips threads that aren't tracked before doing the per-thread bean read, specifically to keep scrape latency bounded.
