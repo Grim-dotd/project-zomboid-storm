@@ -3,7 +3,6 @@ package io.pzstorm.storm.client;
 import static io.pzstorm.storm.logging.StormLogger.LOGGER;
 
 import io.pzstorm.storm.util.StormEnv;
-import java.lang.reflect.Method;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
@@ -22,10 +21,10 @@ import zombie.modding.ActiveMods;
  * StormQueryResponder} / launcher {@code ServerQuery}) and passes it as {@code
  * -Dstorm.workshop.mods} (the property Storm's java-mod gate already uses), plus {@value
  * #BOOT_MODS_PROPERTY}{@code =true} to opt this JVM into boot substitution. At the single boot-time
- * {@code ZomboidFileSystem.loadMods("default")} call, the substitution replicates exactly what
- * vanilla's connect-time client branch will later do — {@code loadTranslationMods() + serverMods} —
- * so the connect-time fast path can prove "the booted mod set is the server's mod set" by simple
- * list equality against {@code GameClient.instance.serverMods}.
+ * {@code ZomboidFileSystem.loadMods("default")} call, the substitution loads exactly the list the
+ * connect-time client load will later build ({@link StormClientModList}: the server's mods, then
+ * local translation mods), so the connect-time fast path can prove "the booted mod set is the
+ * server's mod set" by simple list equality against {@code GameClient.instance.serverMods}.
  *
  * <p>Every failure is soft: any error leaves the vanilla "default" boot to run, which only costs
  * the fast path, never the join. Without the opt-in property the class does nothing, so a manually
@@ -117,17 +116,15 @@ public final class StormJoinPrewarm {
 
         // vanilla "default"-branch bookkeeping, so menu state is indistinguishable from a
         // vanilla boot (loadedMods is stale after a vanilla server connect too)
-        ActiveMods defaults = (ActiveMods) invokePrivate(fs, "readDefaultModsTxt", new Class<?>[0]);
+        ActiveMods defaults =
+                (ActiveMods)
+                        StormClientModList.invokePrivate(fs, "readDefaultModsTxt", new Class<?>[0]);
         defaults.checkMissingMods();
         defaults.checkMissingMaps();
         ActiveMods.setLoadedMods(defaults);
 
-        // exactly the connect-time client branch of loadMods(String): translation mods
-        // first, then the server's ordered list
-        ArrayList<String> toLoad = new ArrayList<>();
-        invokePrivate(fs, "loadTranslationMods", new Class<?>[] {List.class}, toLoad);
-        toLoad.addAll(serverMods);
-        fs.loadMods(toLoad);
+        // the same list the connect-time load builds, so the booted order is the joined order
+        fs.loadMods(StormClientModList.serverThenLocalTranslation(fs, serverMods));
 
         bootModList = Collections.unmodifiableList(new ArrayList<>(serverMods));
         LOGGER.info(
@@ -156,14 +153,6 @@ public final class StormJoinPrewarm {
     public static @Nullable String fingerprint() {
         String value = System.getProperty(FINGERPRINT_PROPERTY, "");
         return value.isBlank() ? null : value;
-    }
-
-    private static Object invokePrivate(
-            Object target, String name, Class<?>[] parameterTypes, Object... args)
-            throws Exception {
-        Method method = target.getClass().getDeclaredMethod(name, parameterTypes);
-        method.setAccessible(true);
-        return method.invoke(target, args);
     }
 
     // test hook: property reads are cheap, but the one-shot flag must reset between tests

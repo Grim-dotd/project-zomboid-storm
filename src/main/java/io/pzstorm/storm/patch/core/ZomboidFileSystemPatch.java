@@ -85,19 +85,23 @@ public class ZomboidFileSystemPatch extends StormClassTransformer {
     }
 
     /**
-     * Client-side join prewarm hook on {@code loadMods(String)} (the profile-name overload). When
-     * the Storm Launcher opted this JVM in ({@code -Dstorm.join.bootmods=true}), the boot-time
-     * {@code loadMods("default")} call loads the target server's mod set instead, so connect-time
-     * {@code ResetLua} finds all flag-independent content already loaded. {@link
-     * io.pzstorm.storm.client.StormJoinPrewarm#substituteBootMods} holds every gate and never
-     * throws; a {@code false} return runs the vanilla body untouched, so a manually launched game
-     * (no property) and the dedicated server pay one boolean check.
+     * Client-side hook on {@code loadMods(String)} (the profile-name overload), two replacements in
+     * turn. When the Storm Launcher opted this JVM in ({@code -Dstorm.join.bootmods=true}), the
+     * boot-time {@code loadMods("default")} call loads the target server's mod set instead, so
+     * connect-time {@code ResetLua} finds all flag-independent content already loaded ({@link
+     * io.pzstorm.storm.client.StormJoinPrewarm#substituteBootMods}). Otherwise, while connected to
+     * a server, the list is built server-first with locally enabled translation mods appended,
+     * instead of vanilla's translation-mods-first order that breaks the Lua checksum ({@link
+     * io.pzstorm.storm.client.StormClientModList#loadForServer}). Both hold every gate and never
+     * throw; a {@code false} return runs the vanilla body untouched, so a boot without the property
+     * and the dedicated server pay two boolean checks.
      */
     public static class LoadModsProfileAdvice {
         @Advice.OnMethodEnter(skipOn = Advice.OnNonDefaultValue.class)
         public static boolean onEnter(
                 @Advice.This Object self, @Advice.Argument(0) String activeMods) {
-            return io.pzstorm.storm.client.StormJoinPrewarm.substituteBootMods(self, activeMods);
+            return io.pzstorm.storm.client.StormJoinPrewarm.substituteBootMods(self, activeMods)
+                    || io.pzstorm.storm.client.StormClientModList.loadForServer(self, activeMods);
         }
     }
 }

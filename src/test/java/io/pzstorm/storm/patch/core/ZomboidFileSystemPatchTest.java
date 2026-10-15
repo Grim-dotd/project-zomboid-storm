@@ -13,18 +13,20 @@ import net.bytebuddy.jar.asm.Opcodes;
 import org.junit.jupiter.api.Test;
 
 /**
- * Verifies that {@link ZomboidFileSystemPatch} injects the boot-mods substitution hook into {@code
- * ZomboidFileSystem.loadMods(String)} and not into the {@code loadMods(ArrayList)} overload the
- * substitution itself calls — a leak there would recurse.
+ * Verifies that {@link ZomboidFileSystemPatch} injects the boot-mods substitution and the
+ * server-first mod list hooks into {@code ZomboidFileSystem.loadMods(String)} and not into the
+ * {@code loadMods(ArrayList)} overload both helpers call — a leak there would recurse.
  *
- * <p>Detection signal: the inlined advice calls {@code StormJoinPrewarm.substituteBootMods} via
- * INVOKESTATIC; vanilla contains no such call.
+ * <p>Detection signal: the inlined advice calls {@code StormJoinPrewarm.substituteBootMods} and
+ * {@code StormClientModList.loadForServer} via INVOKESTATIC; vanilla contains no such calls.
  */
 class ZomboidFileSystemPatchTest implements UnitTest {
 
     private static final String TARGET_CLASS = "zombie/ZomboidFileSystem";
-    private static final String HELPER_OWNER = "io/pzstorm/storm/client/StormJoinPrewarm";
-    private static final String HELPER_METHOD = "substituteBootMods";
+    private static final String[][] HELPERS = {
+        {"io/pzstorm/storm/client/StormJoinPrewarm", "substituteBootMods"},
+        {"io/pzstorm/storm/client/StormClientModList", "loadForServer"},
+    };
 
     private static final String TARGET_METHOD = "loadMods";
     private static final String TARGET_DESC = "(Ljava/lang/String;)V";
@@ -37,20 +39,24 @@ class ZomboidFileSystemPatchTest implements UnitTest {
         assertNotNull(transformed);
         assertTrue(transformed.length > 0);
 
-        assertEquals(
-                0,
-                countHelperCalls(rawClass, TARGET_METHOD, TARGET_DESC),
-                "Vanilla loadMods(String) must not already call " + HELPER_OWNER);
-        assertTrue(
-                countHelperCalls(transformed, TARGET_METHOD, TARGET_DESC) >= 1,
-                "Patched loadMods(String) must contain >=1 INVOKESTATIC "
-                        + HELPER_OWNER
-                        + "."
-                        + HELPER_METHOD);
-        assertEquals(
-                0,
-                countHelperCalls(transformed, TARGET_METHOD, SIBLING_DESC),
-                "Advice must not leak into loadMods(ArrayList) — the substitution calls it");
+        for (String[] helper : HELPERS) {
+            String owner = helper[0];
+            String method = helper[1];
+            assertEquals(
+                    0,
+                    countHelperCalls(rawClass, TARGET_METHOD, TARGET_DESC, owner, method),
+                    "Vanilla loadMods(String) must not already call " + owner);
+            assertTrue(
+                    countHelperCalls(transformed, TARGET_METHOD, TARGET_DESC, owner, method) >= 1,
+                    "Patched loadMods(String) must contain >=1 INVOKESTATIC "
+                            + owner
+                            + "."
+                            + method);
+            assertEquals(
+                    0,
+                    countHelperCalls(transformed, TARGET_METHOD, SIBLING_DESC, owner, method),
+                    "Advice must not leak into loadMods(ArrayList) — the helpers call it");
+        }
     }
 
     private byte[] readClassBytes(String resourcePath) throws Exception {
@@ -60,7 +66,8 @@ class ZomboidFileSystemPatchTest implements UnitTest {
         }
     }
 
-    private static int countHelperCalls(byte[] classBytes, String method, String desc) {
+    private static int countHelperCalls(
+            byte[] classBytes, String method, String desc, String helperOwner, String helperName) {
         int[] hits = new int[1];
         new ClassReader(classBytes)
                 .accept(
@@ -84,8 +91,8 @@ class ZomboidFileSystemPatchTest implements UnitTest {
                                             String mDesc,
                                             boolean isInterface) {
                                         if (opcode == Opcodes.INVOKESTATIC
-                                                && HELPER_OWNER.equals(owner)
-                                                && HELPER_METHOD.equals(mName)) {
+                                                && helperOwner.equals(owner)
+                                                && helperName.equals(mName)) {
                                             hits[0]++;
                                         }
                                     }

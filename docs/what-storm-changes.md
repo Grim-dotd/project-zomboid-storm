@@ -178,6 +178,30 @@ enables Storm-core client Java features:
   Loading](game-port-tcp-loading.md) for the session model, the diverted
   stages, the fail-soft rules and measured mass-join scaling.
 
+- **Locally enabled translation mods no longer break the join checksum** —
+  when a client connects, vanilla `ZomboidFileSystem.loadMods` loads the
+  player's own enabled "translation mods" (mods with no files outside
+  `media/lua/shared/translate`) *before* the server's mod list. The loader
+  places every `require` ahead of the mod that names it, so a translation mod
+  that requires a content mod drags that content mod to the front of the
+  client's load order. The server's Lua checksum is compared file by file in
+  load order, so the join fails with `File doesn't exist on the client:` naming
+  whatever file the server has at that position (an Improved Hair Menu player
+  with its empty optional `ihm_picker` enabled locally was locked out of a
+  server that loads IHM last, twice, with the on-screen advice pointing at a
+  damaged mod). Storm builds the list server-first and appends the local
+  translation mods, keeping only those whose every `require` the server
+  already loads (or an accepted translation mod provides); the rest are logged
+  (`Local mod 'x' is enabled in this computer's Mods list but requires 'y'...`)
+  and left out for the session. The Lua order and checksum now equal the
+  server's regardless of what is enabled locally. Side effect: local
+  translation mods now load last, so their strings override the same keys in
+  a server mod's bundled translations (vanilla had it the other way round).
+  Launcher-started clients boot with the same list, so the connect-time fast
+  path keeps working. Any failure building the list runs the vanilla body.
+  No new bytecode patch: it rides the existing `ZomboidFileSystemPatch` advice
+  on `loadMods(String)`.
+
 - **Region-list dedupe on join** — when new region data arrives,
   `IsoRegions.update` runs `WorldRegionToMetaGrid.clientProcessBuildings`,
   which calls `DataRoot.getIsoWorldRegionsInCell` 18 times per changed cell
