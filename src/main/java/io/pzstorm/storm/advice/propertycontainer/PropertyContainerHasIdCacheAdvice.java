@@ -1,5 +1,6 @@
 package io.pzstorm.storm.advice.propertycontainer;
 
+import java.util.ArrayList;
 import java.util.Arrays;
 import net.bytebuddy.asm.Advice;
 import zombie.core.TilePropertyAliasMap;
@@ -11,26 +12,28 @@ import zombie.core.properties.PropertyContainer;
  *
  * <p>Vanilla dispatches through {@code has(String)}, which calls {@code
  * TilePropertyAliasMap.instance.getIDFromPropertyName(String)} — a {@code HashMap<String,Integer>}
- * lookup — every call, then {@code containsKey(short)}. The enum ordinal is stable and the name→ID
- * mapping is fixed for the lifetime of the JVM (the alias map is populated once at game load and
- * never mutated). Live-client sampling attributed 1.75% of MainThread to the {@code has} path under
- * {@code ParameterFootstepMaterial.getMaterial}, which walks every object on the character's square
- * each FMOD parameter update — the same enum passed thousands of times per frame.
+ * lookup — every call, then {@code containsKey(short)}. Live-client sampling attributed 1.75% of
+ * MainThread to the {@code has} path under {@code ParameterFootstepMaterial.getMaterial}, which
+ * walks every object on the character's square each FMOD parameter update — the same enum passed
+ * thousands of times per frame.
  *
- * <p>The fast path caches the resolved short ID per enum ordinal in a {@code short[]} sized by
- * {@code IsoPropertyType.values().length}. Entries default to {@code -1}; on first hit the advice
- * resolves the name via {@link TilePropertyAliasMap} and stores it, then all future calls for that
- * enum bypass the string round-trip entirely and go straight to the Trove {@code
- * containsKey(short)} inherited from {@code TShortShortHashMap}.
+ * <p>The fast path caches the resolved short ID per enum ordinal in {@link #IDS}, alongside the
+ * {@link TilePropertyAliasMap.TileProperty} that ID resolved to in {@link #PROPS}. {@code
+ * TilePropertyAliasMap.Generate} rebuilds the map with fresh {@code TileProperty} objects on every
+ * world load, and IDs can shift between loads (the second join in one client JVM). Each call checks
+ * that the cached ID still points at the cached {@code TileProperty}; a stale entry fails that
+ * reference compare and is re-resolved. While the name is unresolved the vanilla body runs.
  *
  * <p>Return encoding for {@code skipOn = OnNonDefaultValue}: enter returns {@code 0} to run the
- * vanilla body (null enum arg), {@code 1} for {@code false}, {@code 2} for {@code true}. Exit
- * unpacks the flag into the original {@code boolean} return. This lets a single {@code int} enter
- * return communicate both "skip body" and "which boolean value".
+ * vanilla body, {@code 1} for {@code false}, {@code 2} for {@code true}. Exit unpacks the flag into
+ * the original {@code boolean} return.
  */
 public class PropertyContainerHasIdCacheAdvice {
 
     public static final short[] IDS = init();
+
+    public static final TilePropertyAliasMap.TileProperty[] PROPS =
+            new TilePropertyAliasMap.TileProperty[IsoPropertyType.values().length];
 
     private static short[] init() {
         short[] a = new short[IsoPropertyType.values().length];
@@ -46,8 +49,15 @@ public class PropertyContainerHasIdCacheAdvice {
         }
         int ord = type.ordinal();
         short id = IDS[ord];
-        if (id == -1) {
-            id = (short) TilePropertyAliasMap.instance.getIDFromPropertyName(type.getName());
+        ArrayList<TilePropertyAliasMap.TileProperty> props =
+                TilePropertyAliasMap.instance.properties;
+        if (id < 0 || id >= props.size() || props.get(id) != PROPS[ord]) {
+            int resolved = TilePropertyAliasMap.instance.getIDFromPropertyName(type.getName());
+            if (resolved == -1) {
+                return 0;
+            }
+            id = (short) resolved;
+            PROPS[ord] = props.get(id);
             IDS[ord] = id;
         }
         return self.containsKey(id) ? 2 : 1;

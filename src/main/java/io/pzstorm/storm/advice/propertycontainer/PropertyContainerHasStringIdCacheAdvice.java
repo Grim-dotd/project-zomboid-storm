@@ -1,5 +1,6 @@
 package io.pzstorm.storm.advice.propertycontainer;
 
+import java.util.ArrayList;
 import net.bytebuddy.asm.Advice;
 import zombie.core.TilePropertyAliasMap;
 import zombie.core.properties.PropertyContainer;
@@ -17,17 +18,17 @@ import zombie.core.properties.PropertyContainer;
  * times per frame in busy scenes. The enum-keyed {@link PropertyContainerHasIdCacheAdvice} does not
  * cover this string overload.
  *
- * <p>The fast path caches the resolved short ID for the {@code "doorTrans"} literal once — the
- * alias map is populated at game load and name→ID mappings are never remapped, the same argument
- * {@link PropertyContainerHasIdCacheAdvice} relies on — then goes straight to the live Trove {@code
- * containsKey(short)}. Because the container's own map is still consulted on every call, runtime
- * property mutation ({@code set}/{@code unset} from mods) is reflected immediately: no invalidation
- * machinery is needed for parity.
+ * <p>The fast path caches the resolved short ID for the {@code "doorTrans"} literal together with
+ * the {@link TilePropertyAliasMap.TileProperty} it resolved to, then goes straight to the live
+ * Trove {@code containsKey(short)}. {@code TilePropertyAliasMap.Generate} rebuilds the map with
+ * fresh {@code TileProperty} objects on every world load, so each call checks that the cached ID
+ * still points at the cached {@code TileProperty} and re-resolves when it does not — the same
+ * scheme as {@link PropertyContainerHasIdCacheAdvice}. The container's own map is consulted on
+ * every call, so runtime {@code set}/{@code unset} from mods is reflected immediately.
  *
  * <p>Non-matching names fall through to the vanilla body after one reference compare plus a
  * length-gated {@code equals}. While the name is unresolved ({@code getIDFromPropertyName} returns
- * {@code -1}), the vanilla body runs and resolution is retried on the next call, so a query racing
- * tile-definition load can never cache a stale miss.
+ * {@code -1}), the vanilla body runs and resolution is retried on the next call.
  *
  * <p>Return encoding for {@code skipOn = OnNonDefaultValue}: {@code 0} = run vanilla body, {@code
  * 1} = {@code false}, {@code 2} = {@code true} — same scheme as {@link
@@ -39,8 +40,11 @@ public class PropertyContainerHasStringIdCacheAdvice {
     // below tests against the same interned instance FBORenderCell's "doorTrans" literal uses.
     public static final String DOOR_TRANS = "doorTrans";
 
-    /** Resolved alias-map ID for {@link #DOOR_TRANS}; {@link Short#MIN_VALUE} = not resolved. */
-    public static short doorTransId = Short.MIN_VALUE;
+    /** Resolved alias-map ID for {@link #DOOR_TRANS}; {@code -1} = not resolved. */
+    public static short doorTransId = -1;
+
+    /** The alias-map entry {@link #doorTransId} resolved to. */
+    public static TilePropertyAliasMap.TileProperty doorTransProp;
 
     @Advice.OnMethodEnter(skipOn = Advice.OnNonDefaultValue.class)
     public static int onEnter(
@@ -49,12 +53,15 @@ public class PropertyContainerHasStringIdCacheAdvice {
             return 0;
         }
         short id = doorTransId;
-        if (id == Short.MIN_VALUE) {
+        ArrayList<TilePropertyAliasMap.TileProperty> props =
+                TilePropertyAliasMap.instance.properties;
+        if (id < 0 || id >= props.size() || props.get(id) != doorTransProp) {
             int resolved = TilePropertyAliasMap.instance.getIDFromPropertyName(DOOR_TRANS);
             if (resolved == -1) {
                 return 0;
             }
             id = (short) resolved;
+            doorTransProp = props.get(id);
             doorTransId = id;
         }
         return self.containsKey(id) ? 2 : 1;
