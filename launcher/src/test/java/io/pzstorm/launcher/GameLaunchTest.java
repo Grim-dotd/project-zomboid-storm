@@ -432,13 +432,14 @@ class GameLaunchTest {
         assumeTrue(
                 System.getProperty("os.name", "").toLowerCase().contains("linux"),
                 "linux loader-path conventions");
-        Files.createDirectories(gameDir.resolve("linux64"));
+        Files.createDirectories(gameDir.resolve("natives"));
         Files.createDirectories(gameDir.resolve(Path.of("jre64", "lib")));
         Files.write(gameDir.resolve(Path.of("jre64", "lib", "libjsig.so")), new byte[] {1});
         Files.write(gameDir.resolve("libPZXInitThreads64.so"), new byte[] {1});
 
         Map<String, String> env = GameLaunch.nativeEnvironment(gameDir, false);
-        assertTrue(env.get("LD_LIBRARY_PATH").contains(gameDir.resolve("linux64").toString()));
+        String natives = gameDir.resolve("natives").toString();
+        assertTrue(env.get("LD_LIBRARY_PATH").startsWith(natives + ":"), "natives first");
         assertTrue(env.get("LD_LIBRARY_PATH").contains(gameDir.toString()));
         assertTrue(env.get("LD_PRELOAD").contains("libjsig.so"));
         assertTrue(env.get("LD_PRELOAD").contains("libPZXInitThreads64.so"));

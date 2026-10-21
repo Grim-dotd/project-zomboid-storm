@@ -2,12 +2,18 @@ package io.pzstorm.launcher;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assumptions.assumeTrue;
 
+import java.io.IOException;
 import java.lang.foreign.MemorySegment;
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
 
 class SteamUgcTest {
 
@@ -54,5 +60,21 @@ class SteamUgcTest {
         MemorySegment wide = MemorySegment.ofBuffer(packWide);
         assertEquals(fileId, SteamUgc.downloadResultItemId(wide, false));
         assertEquals(2, SteamUgc.downloadResultCode(wide, false));
+    }
+
+    /**
+     * The Linux client ships steam_api under natives/ (first in projectzomboid.sh's loader path).
+     */
+    @Test
+    void findLibraryChecksNativesOnLinux(@TempDir Path gameDir) throws IOException {
+        assumeTrue(
+                System.getProperty("os.name", "").toLowerCase().contains("linux"),
+                "linux install layout");
+        assertThrows(SteamUgc.LibraryMissingException.class, () -> SteamUgc.findLibrary(gameDir));
+
+        Path natives = gameDir.resolve("natives").resolve("libsteam_api.so");
+        Files.createDirectories(natives.getParent());
+        Files.write(natives, new byte[] {1});
+        assertEquals(natives, SteamUgc.findLibrary(gameDir));
     }
 }

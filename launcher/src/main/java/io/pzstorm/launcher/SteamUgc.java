@@ -257,7 +257,20 @@ public final class SteamUgc implements AutoCloseable {
         }
     }
 
-    /** Locates the steam_api library inside the game install. */
+    /**
+     * The game install carries no steam_api library where the launcher looks. Says nothing about
+     * whether a Steam client is running, so callers must not treat it as Steam being offline.
+     */
+    public static final class LibraryMissingException extends SteamException {
+        LibraryMissingException(String message) {
+            super(message);
+        }
+    }
+
+    /**
+     * Locates the steam_api library inside the game install. The Linux client ships it under {@code
+     * natives/} (the first entry of vanilla projectzomboid.sh's loader path).
+     */
     static Path findLibrary(Path gameDir) {
         String os = System.getProperty("os.name", "").toLowerCase();
         List<Path> candidates;
@@ -268,6 +281,7 @@ public final class SteamUgc implements AutoCloseable {
         } else {
             candidates =
                     List.of(
+                            gameDir.resolve("natives").resolve("libsteam_api.so"),
                             gameDir.resolve("linux64").resolve("libsteam_api.so"),
                             gameDir.resolve("libsteam_api.so"));
         }
@@ -276,7 +290,7 @@ public final class SteamUgc implements AutoCloseable {
                 return candidate;
             }
         }
-        throw new SteamException("steam_api library not found under " + gameDir);
+        throw new LibraryMissingException("steam_api library not found under " + gameDir);
     }
 
     public static SteamUgc connect(Path gameDir) {

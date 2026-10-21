@@ -350,9 +350,10 @@ public final class GameLaunch {
     }
 
     /**
-     * Vanilla's projectzomboid.sh exports these before starting the game: transitive native
-     * dependencies (fmod, steam_api) resolve through the loader path, not java.library.path, so a
-     * direct JVM spawn needs them too. Windows resolves DLLs from the working directory already.
+     * Vanilla's projectzomboid.sh exports these before starting the game ({@code natives}, the game
+     * dir, then the bundled JRE's lib): transitive native dependencies (fmod, steam_api) resolve
+     * through the loader path, not java.library.path, so a direct JVM spawn needs them too. Windows
+     * resolves DLLs from the working directory already.
      */
     static Map<String, String> nativeEnvironment(Path gameDir, boolean windowsJvm) {
         Map<String, String> env = new LinkedHashMap<>();
@@ -362,6 +363,7 @@ public final class GameLaunch {
         boolean mac = System.getProperty("os.name", "").toLowerCase().contains("mac");
         List<String> libDirs = new ArrayList<>();
         Path[] dirs = {
+            gameDir.resolve("natives"),
             gameDir.resolve("linux64"),
             gameDir,
             gameDir.resolve(Paths.get("jre64", "lib")),

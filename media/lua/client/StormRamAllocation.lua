@@ -29,7 +29,7 @@ local LAUNCH_ARGS = {
     },
     {
         labelKey = "UI_Storm_LowRam_Linux",
-        args = "-javaagent:../../workshop/content/108600/"
+        args = "-javaagent:../../../workshop/content/108600/"
             .. WORKSHOP_ID
             .. "/mods/storm/bootstrap/storm-bootstrap.jar --",
     },

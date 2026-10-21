@@ -178,7 +178,7 @@ workshop updates.
    (`+password <serverPassword>`) args, then spawns the JVM with the game
    directory as working directory. On linux/mac the launcher exports the same
    loader environment vanilla's `projectzomboid.sh` would (`LD_LIBRARY_PATH`
-   with `linux64/`, the game dir and the bundled JRE's lib dir, plus the
+   with `natives/`, the game dir and the bundled JRE's lib dir, plus the
    `libjsig`/`libPZXInitThreads64` preloads on linux; `DYLD_LIBRARY_PATH` on
    mac) so transitive native dependencies resolve for a direct JVM spawn.
    Game output is captured to `<home>/Zomboid/storm/launcher/logs/game.log`.
@@ -446,7 +446,7 @@ for your OS (workshop item `3670772371`):
 
 ```
 Windows: -agentpath:../../workshop/content/108600/3670772371/mods/storm/bootstrap/agentlib.dll=storm-bootstrap.jar --
-Linux:   -javaagent:../../workshop/content/108600/3670772371/mods/storm/bootstrap/storm-bootstrap.jar --
+Linux:   -javaagent:../../../workshop/content/108600/3670772371/mods/storm/bootstrap/storm-bootstrap.jar --
 macOS:   -javaagent:../../../../../workshop/content/108600/3670772371/mods/storm/bootstrap/storm-bootstrap.jar --
 ```
 

@@ -13,6 +13,12 @@ final class SteamUpdateChild {
     static final int EXIT_STEAM_UNAVAILABLE = 2;
 
     /**
+     * The game install has no steam_api library where the launcher looks. Distinct from {@link
+     * #EXIT_STEAM_UNAVAILABLE} because it says nothing about whether Steam is running.
+     */
+    static final int EXIT_STEAM_LIBRARY_MISSING = 4;
+
+    /**
      * Marks an id the parent already proved current against the published workshop metadata: it
      * gets an instant local state check instead of the per-item DownloadItem confirm, escalating to
      * the full update only when the state is not join-ready.
@@ -64,6 +70,9 @@ final class SteamUpdateChild {
                 }
             }
             return failures == 0 ? 0 : EXIT_SOME_FAILED;
+        } catch (SteamUgc.LibraryMissingException e) {
+            System.out.println("steam library missing: " + e.getMessage());
+            return EXIT_STEAM_LIBRARY_MISSING;
         } catch (SteamUgc.SteamException e) {
             System.out.println("steam unavailable: " + e.getMessage());
             return EXIT_STEAM_UNAVAILABLE;

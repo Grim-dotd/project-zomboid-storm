@@ -41,9 +41,9 @@ public final class WorkshopUpdate {
 
         /**
          * True only when the child ran and SteamAPI_Init failed — positive evidence that no Steam
-         * client is running (as opposed to {@link #childRan} false for jar-on-disk missing, where
-         * Steam's state is unknown). This is the gate for the offline acf repair, which must never
-         * edit the file under a live Steam client.
+         * client is running (as opposed to {@link #childRan} false for jar-on-disk or steam_api
+         * library missing, where Steam's state is unknown). This is the gate for the offline acf
+         * repair, which must never edit the file under a live Steam client.
          */
         public final boolean steamUnavailable;
 
@@ -200,6 +200,13 @@ public final class WorkshopUpdate {
                     "Workshop update timed out after " + CHILD_TIMEOUT_MINUTES + " minutes");
         }
         int exit = child.exitValue();
+        if (exit == SteamUpdateChild.EXIT_STEAM_LIBRARY_MISSING) {
+            Log.warn(
+                    "No steam_api library under the game directory — workshop items were NOT"
+                            + " updated. The game's own join flow will handle them (may prompt"
+                            + " in-game).");
+            return new Result(false, workshopItemIds.size(), workshopItemIds.size(), false);
+        }
         if (exit == SteamUpdateChild.EXIT_STEAM_UNAVAILABLE) {
             Log.warn(
                     "Steam is not available — workshop items were NOT updated. The game's"

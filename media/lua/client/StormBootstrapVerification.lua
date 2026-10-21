@@ -38,7 +38,7 @@ local function createOSModal()
     local windowsCopy =
         "-agentpath:../../workshop/content/108600/3670772371/mods/storm/bootstrap/agentlib.dll=storm-bootstrap.jar --"
     local linuxCopy =
-        "-javaagent:../../workshop/content/108600/3670772371/mods/storm/bootstrap/storm-bootstrap.jar --"
+        "-javaagent:../../../workshop/content/108600/3670772371/mods/storm/bootstrap/storm-bootstrap.jar --"
     local macCopy =
         "-javaagent:../../../../../workshop/content/108600/3670772371/mods/storm/bootstrap/storm-bootstrap.jar --"
 
