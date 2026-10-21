@@ -339,6 +339,9 @@ import io.pzstorm.storm.patch.performance.VirtualAnimalStridePatch;
 import io.pzstorm.storm.patch.performance.WarManagerUpdatePatch;
 import io.pzstorm.storm.patch.performance.WeatherFxScanSkipPatch;
 import io.pzstorm.storm.patch.performance.WorldMapServerWriteSavefilePatch;
+import io.pzstorm.storm.patch.performance.WorldMapSymbolVisibilityMemoPatch;
+import io.pzstorm.storm.patch.performance.WorldMapSymbolsHitTestBatchPatch;
+import io.pzstorm.storm.patch.performance.WorldMapSymbolsRenderBatchPatch;
 import io.pzstorm.storm.patch.performance.WorldMapVisitedServerUpdatePatch;
 import io.pzstorm.storm.patch.performance.WorldRegionToMetaGridFastContainsPatch;
 import io.pzstorm.storm.patch.performance.WorldSimulationUpdatePatch;
@@ -410,6 +413,11 @@ public class StormClassTransformers {
         registerTransformer(new UIWorldMapPatch());
         registerTransformer(new ChatManagerPatch());
         registerTransformer(new UIWorldMapV1Patch());
+        if (!StormEnv.isStormServer()) {
+            registerTransformer(new WorldMapSymbolVisibilityMemoPatch());
+            registerTransformer(new WorldMapSymbolsRenderBatchPatch());
+            registerTransformer(new WorldMapSymbolsHitTestBatchPatch());
+        }
         registerTransformer(new DebugLogPatch());
         registerTransformer(new DebugLogStreamFormatPatch());
         registerTransformer(new ZomboidFileSystemPatch());

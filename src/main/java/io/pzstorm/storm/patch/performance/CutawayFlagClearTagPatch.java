@@ -36,13 +36,12 @@ public class CutawayFlagClearTagPatch extends StormClassTransformer {
     @Override
     public byte[] transform(byte[] rawClass) {
         byte[] woven = super.transform(rawClass);
-        String filter = CutawayWeaveCheck.FILTER;
-        String levels = CutawayWeaveCheck.RENDER_LEVELS;
-        CutawayWeaveCheck.require(
-                woven, "clearPlayerCutawayFlags", null, filter, "externalInvalidate", 1);
-        CutawayWeaveCheck.require(
+        String filter = WeaveCheck.FILTER;
+        String levels = WeaveCheck.RENDER_LEVELS;
+        WeaveCheck.require(woven, "clearPlayerCutawayFlags", null, filter, "externalInvalidate", 1);
+        WeaveCheck.require(
                 woven, "clearPlayerCutawayFlags2", null, filter, "externalInvalidate", 1);
-        CutawayWeaveCheck.require(woven, null, null, levels, "invalidateLevel", 0);
+        WeaveCheck.require(woven, null, null, levels, "invalidateLevel", 0);
         return woven;
     }
 

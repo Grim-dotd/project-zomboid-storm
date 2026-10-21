@@ -48,30 +48,27 @@ public class CutawayChangedInvalidationPatch extends StormClassTransformer {
     public byte[] transform(byte[] rawClass) {
         byte[] woven = super.transform(rawClass);
         String visit = "doCutawayVisitSquares";
-        String filter = CutawayWeaveCheck.FILTER;
-        String square = CutawayWeaveCheck.SQUARE;
-        String levels = CutawayWeaveCheck.RENDER_LEVELS;
-        CutawayWeaveCheck.require(woven, visit, VISIT_DESCRIPTOR, filter, "begin", 1);
-        CutawayWeaveCheck.require(woven, visit, VISIT_DESCRIPTOR, filter, "end", 1);
-        CutawayWeaveCheck.require(woven, visit, VISIT_DESCRIPTOR, filter, "setFlag", 1);
-        CutawayWeaveCheck.require(woven, visit, VISIT_DESCRIPTOR, filter, "addFlag", 2);
-        CutawayWeaveCheck.require(woven, visit, VISIT_DESCRIPTOR, filter, "ownInvalidate", 3);
-        CutawayWeaveCheck.require(woven, "invalidateChunk", null, filter, "edgeInvalidate", 1);
-        CutawayWeaveCheck.require(
-                woven, "checkExteriorWalls", null, filter, "externalInvalidate", 1);
-        CutawayWeaveCheck.require(
-                woven, "checkSlopedSurfaces", null, filter, "externalInvalidate", 1);
-        CutawayWeaveCheck.require(
-                woven, "checkOrphanStructures", null, filter, "externalInvalidate", 4);
-        CutawayWeaveCheck.require(woven, "squareChanged", null, filter, "onSquareChanged", 1);
-        CutawayWeaveCheck.require(woven, "checkPlayerRoom", null, filter, "onViewpointCheck", 1);
+        String filter = WeaveCheck.FILTER;
+        String square = WeaveCheck.SQUARE;
+        String levels = WeaveCheck.RENDER_LEVELS;
+        WeaveCheck.require(woven, visit, VISIT_DESCRIPTOR, filter, "begin", 1);
+        WeaveCheck.require(woven, visit, VISIT_DESCRIPTOR, filter, "end", 1);
+        WeaveCheck.require(woven, visit, VISIT_DESCRIPTOR, filter, "setFlag", 1);
+        WeaveCheck.require(woven, visit, VISIT_DESCRIPTOR, filter, "addFlag", 2);
+        WeaveCheck.require(woven, visit, VISIT_DESCRIPTOR, filter, "ownInvalidate", 3);
+        WeaveCheck.require(woven, "invalidateChunk", null, filter, "edgeInvalidate", 1);
+        WeaveCheck.require(woven, "checkExteriorWalls", null, filter, "externalInvalidate", 1);
+        WeaveCheck.require(woven, "checkSlopedSurfaces", null, filter, "externalInvalidate", 1);
+        WeaveCheck.require(woven, "checkOrphanStructures", null, filter, "externalInvalidate", 4);
+        WeaveCheck.require(woven, "squareChanged", null, filter, "onSquareChanged", 1);
+        WeaveCheck.require(woven, "checkPlayerRoom", null, filter, "onViewpointCheck", 1);
 
         // Any site left over is a writer or an invalidation the audit has not seen.
-        CutawayWeaveCheck.require(woven, null, null, square, "setPlayerCutawayFlag", 0);
-        CutawayWeaveCheck.require(woven, null, null, square, "addPlayerCutawayFlag", 0);
-        CutawayWeaveCheck.require(woven, null, null, square, "clearPlayerCutawayFlag", 0);
-        CutawayWeaveCheck.require(woven, "checkOccludedRooms", null, levels, "invalidateLevel", 1);
-        CutawayWeaveCheck.require(woven, null, null, levels, "invalidateLevel", 1);
+        WeaveCheck.require(woven, null, null, square, "setPlayerCutawayFlag", 0);
+        WeaveCheck.require(woven, null, null, square, "addPlayerCutawayFlag", 0);
+        WeaveCheck.require(woven, null, null, square, "clearPlayerCutawayFlag", 0);
+        WeaveCheck.require(woven, "checkOccludedRooms", null, levels, "invalidateLevel", 1);
+        WeaveCheck.require(woven, null, null, levels, "invalidateLevel", 1);
         return woven;
     }
 

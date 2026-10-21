@@ -6,18 +6,18 @@ import net.bytebuddy.jar.asm.MethodVisitor;
 import net.bytebuddy.jar.asm.Opcodes;
 
 /**
- * Counts call sites in woven bytes so the cutaway invalidation patches can refuse a weave whose
- * shape no longer matches the audited vanilla method. A relaxed member substitution matches nothing
- * without complaint, and a half-woven class would filter invalidations it cannot see.
+ * Counts call sites in woven bytes so a call-site patch can refuse a weave whose shape no longer
+ * matches the audited vanilla method. A relaxed member substitution matches nothing without
+ * complaint, and a half-woven class would filter invalidations it cannot see.
  */
-final class CutawayWeaveCheck {
+final class WeaveCheck {
 
     static final String FILTER =
             "io/pzstorm/storm/advice/cutawayinvalidate/CutawayInvalidationFilter";
     static final String SQUARE = "zombie/iso/IsoGridSquare";
     static final String RENDER_LEVELS = "zombie/iso/fboRenderChunk/FBORenderLevels";
 
-    private CutawayWeaveCheck() {}
+    private WeaveCheck() {}
 
     /**
      * @param method name of the enclosing method, or {@code null} for the whole class
@@ -59,6 +59,16 @@ final class CutawayWeaveCheck {
                         },
                         ClassReader.SKIP_FRAMES | ClassReader.SKIP_DEBUG);
         return count[0];
+    }
+
+    /**
+     * True when {@code method} holds one {@code begin} and at least one {@code end} call on {@code
+     * owner}.
+     */
+    static boolean bracketed(byte[] classBytes, String method, String owner) {
+        return count(classBytes, method, null, owner, "begin") == 1
+                && count(classBytes, method, null, owner, "end") >= 1
+                && count(classBytes, null, null, owner, "begin") == 1;
     }
 
     static void require(

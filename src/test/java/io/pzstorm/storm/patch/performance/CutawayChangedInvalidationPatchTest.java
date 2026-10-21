@@ -32,9 +32,9 @@ class CutawayChangedInvalidationPatchTest implements UnitTest {
 
     private static final String CUTAWAYS = "zombie/iso/fboRenderChunk/FBORenderCutaways";
     private static final String LEVELS_DATA = CUTAWAYS + "$ChunkLevelsData";
-    private static final String FILTER = CutawayWeaveCheck.FILTER;
-    private static final String SQUARE = CutawayWeaveCheck.SQUARE;
-    private static final String RENDER_LEVELS = CutawayWeaveCheck.RENDER_LEVELS;
+    private static final String FILTER = WeaveCheck.FILTER;
+    private static final String SQUARE = WeaveCheck.SQUARE;
+    private static final String RENDER_LEVELS = WeaveCheck.RENDER_LEVELS;
     private static final String FAST_PATH =
             "io/pzstorm/storm/advice/cutawayvisit/CutawayVisitFastPath";
 
@@ -247,7 +247,7 @@ class CutawayChangedInvalidationPatchTest implements UnitTest {
 
     private static int count(
             byte[] bytes, String method, String descriptor, String owner, String callee) {
-        return CutawayWeaveCheck.count(bytes, method, descriptor, owner, callee);
+        return WeaveCheck.count(bytes, method, descriptor, owner, callee);
     }
 
     /** Histogram of {@code owner.name+descriptor} for every call made by one method. */
