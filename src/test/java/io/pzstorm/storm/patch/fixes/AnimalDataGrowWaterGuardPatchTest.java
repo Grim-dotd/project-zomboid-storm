@@ -16,15 +16,19 @@ import org.junit.jupiter.api.Test;
  * Verifies that {@link AnimalDataGrowWaterGuardPatch} injects the water/duplicate guard into {@code
  * AnimalData.grow(String)} and only into that method.
  *
- * <p>Detection signal: the inlined advice calls {@code IsoAnimal.checkForWater()}. Vanilla {@code
- * grow} calls it once; the patched method must call it at least twice. {@code checkStages}, which
- * never calls it, must stay untouched.
+ * <p>Detection signals: the inlined advice calls {@code IsoAnimal.checkForWater()} (vanilla {@code
+ * grow} calls it once, the patched method at least twice) and the advice's {@code
+ * reassignDuplicateId} helper, which vanilla never calls. {@code checkStages}, which calls neither,
+ * must stay untouched.
  */
 class AnimalDataGrowWaterGuardPatchTest implements UnitTest {
 
     private static final String ANIMAL_DATA = "zombie/characters/animals/datas/AnimalData";
     private static final String ISO_ANIMAL = "zombie/characters/animals/IsoAnimal";
     private static final String CHECK_FOR_WATER = "checkForWater";
+    private static final String ADVICE =
+            "io/pzstorm/storm/advice/animaldatagrowwaterguard/AnimalDataGrowWaterGuardAdvice";
+    private static final String REASSIGN = "reassignDuplicateId";
 
     private static final String TARGET_METHOD = "grow";
     private static final String TARGET_DESC = "(Ljava/lang/String;)V";
@@ -51,6 +55,13 @@ class AnimalDataGrowWaterGuardPatchTest implements UnitTest {
                         + targetAfter);
         assertEquals(0, siblingBefore, "Vanilla checkStages never calls checkForWater");
         assertEquals(siblingBefore, siblingAfter, "Advice must not leak into checkStages");
+
+        assertEquals(0, countReassignCalls(rawClass, TARGET_METHOD, TARGET_DESC));
+        assertEquals(
+                1,
+                countReassignCalls(transformed, TARGET_METHOD, TARGET_DESC),
+                "Patched grow must call the duplicate-id helper exactly once");
+        assertEquals(0, countReassignCalls(transformed, SIBLING_METHOD, SIBLING_DESC));
     }
 
     private byte[] readClassBytes(String resourcePath) throws Exception {
@@ -61,6 +72,15 @@ class AnimalDataGrowWaterGuardPatchTest implements UnitTest {
     }
 
     private static int countWaterChecks(byte[] classBytes, String method, String desc) {
+        return countCalls(classBytes, method, desc, ISO_ANIMAL, CHECK_FOR_WATER);
+    }
+
+    private static int countReassignCalls(byte[] classBytes, String method, String desc) {
+        return countCalls(classBytes, method, desc, ADVICE, REASSIGN);
+    }
+
+    private static int countCalls(
+            byte[] classBytes, String method, String desc, String callOwner, String callName) {
         int[] hits = new int[1];
         new ClassReader(classBytes)
                 .accept(
@@ -83,8 +103,7 @@ class AnimalDataGrowWaterGuardPatchTest implements UnitTest {
                                             String mName,
                                             String mDesc,
                                             boolean isInterface) {
-                                        if (ISO_ANIMAL.equals(owner)
-                                                && CHECK_FOR_WATER.equals(mName)) {
+                                        if (callOwner.equals(owner) && callName.equals(mName)) {
                                             hits[0]++;
                                         }
                                     }
