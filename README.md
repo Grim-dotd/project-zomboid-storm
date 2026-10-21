@@ -34,3 +34,20 @@ See [What Storm Changes](docs/what-storm-changes.md) for the full list.
 - [Prometheus Metrics](docs/metrics.md) — exposing metrics and adding new ones from mods
 - [Chunk Streaming Observability](docs/chunk-streaming-observability.md) — attributing a chunk-stream stall to one of five causes, and proving a fix worked
 - [Mod Author Guide](docs/mod-author-guide.md) — `ZomboidMod` entry point, annotation surfaces, Lua API, server commands
+
+---
+
+<table align="center">
+  <tr>
+    <td align="center" width="640">
+      <br>
+      <sub><b>STORM HEAD SPONSOR</b></sub>
+      <h3><a href="https://discord.gg/after-the-fall">After The Fall</a></h3>
+      <a href="https://discord.gg/after-the-fall"><img alt="Join the ATF Discord" src="https://img.shields.io/badge/Discord-Join%20ATF-5865F2?style=for-the-badge&logo=discord&logoColor=white"></a>
+      <img alt="PvPvE server 40.160.20.9:16261" src="https://img.shields.io/badge/PvPvE%20Server-40.160.20.9%3A16261-84B2C4?style=for-the-badge">
+      <br><br>
+      <a href="https://discord.gg/Nhy2eQg8KD"><img alt="Also supported by Undead Relent" src="https://img.shields.io/badge/Also%20supported%20by-Undead%20Relent-444?style=flat-square&logo=discord&logoColor=white"></a>
+      <br><br>
+    </td>
+  </tr>
+</table>
