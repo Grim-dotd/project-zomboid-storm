@@ -62,6 +62,75 @@ final class WeaveCheck {
     }
 
     /**
+     * Counts {@code PUTFIELD}/{@code PUTSTATIC} writes of {@code owner.field} like {@link #count}.
+     */
+    static int countFieldWrites(
+            byte[] classBytes, String method, String descriptor, String owner, String field) {
+        int[] count = {0};
+        new ClassReader(classBytes)
+                .accept(
+                        new ClassVisitor(Opcodes.ASM9) {
+                            @Override
+                            public MethodVisitor visitMethod(
+                                    int access,
+                                    String name,
+                                    String desc,
+                                    String signature,
+                                    String[] exceptions) {
+                                if (method != null && !method.equals(name)) {
+                                    return null;
+                                }
+                                if (descriptor != null && !descriptor.equals(desc)) {
+                                    return null;
+                                }
+                                return new MethodVisitor(Opcodes.ASM9) {
+                                    @Override
+                                    public void visitFieldInsn(
+                                            int opcode,
+                                            String insnOwner,
+                                            String insnName,
+                                            String insnDesc) {
+                                        boolean write =
+                                                opcode == Opcodes.PUTFIELD
+                                                        || opcode == Opcodes.PUTSTATIC;
+                                        if (write
+                                                && owner.equals(insnOwner)
+                                                && field.equals(insnName)) {
+                                            count[0]++;
+                                        }
+                                    }
+                                };
+                            }
+                        },
+                        ClassReader.SKIP_FRAMES | ClassReader.SKIP_DEBUG);
+        return count[0];
+    }
+
+    static void requireFieldWrites(
+            byte[] classBytes,
+            String method,
+            String descriptor,
+            String owner,
+            String field,
+            int expected) {
+        int actual = countFieldWrites(classBytes, method, descriptor, owner, field);
+        if (actual != expected) {
+            throw new IllegalStateException(
+                    "Expected "
+                            + expected
+                            + " write(s) to "
+                            + owner
+                            + "."
+                            + field
+                            + " in "
+                            + (method == null ? "the class" : method)
+                            + " but found "
+                            + actual
+                            + "; the vanilla method changed shape, so the patch is not applied");
+        }
+    }
+
+    /**
      * True when {@code method} holds one {@code begin} and at least one {@code end} call on {@code
      * owner}.
      */
