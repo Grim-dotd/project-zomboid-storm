@@ -99,6 +99,7 @@ needs a classes directory — the caller ships the compiled bytecode in the requ
 | Flag | Purpose |
 |------|---------|
 | `-Dstorm.http.port=<port>` | Starts Storm's HTTP server on `<port>` (required for any endpoint). |
+| `-Dstorm.http.host=<address>` | Address the server binds to. Defaults to `127.0.0.1`. Set `0.0.0.0` only behind a firewall, because `/eval` and `/reload` have no auth. |
 | `-Dstorm.hotreload=true` | Registers `/reload` and `/eval`. Without it they return `404`. |
 
 Example (Linux dedicated server, local install):

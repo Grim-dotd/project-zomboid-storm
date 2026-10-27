@@ -9,11 +9,15 @@ import java.net.InetSocketAddress;
 /**
  * Owns the single shared {@link HttpServer} instance for Storm and its mods. Opt-in via {@code
  * -Dstorm.http.port=<port>}; if the property is absent or not a positive integer, the server never
- * starts. All requests are delegated to {@link HttpEndpointDispatcher}.
+ * starts. It binds to {@code -Dstorm.http.host}, which defaults to loopback because {@code /eval}
+ * and {@code /reload} run arbitrary code with no auth. All requests are delegated to {@link
+ * HttpEndpointDispatcher}.
  */
 public class StormHttpServer {
 
     public static final String PORT_PROPERTY = "storm.http.port";
+    public static final String HOST_PROPERTY = "storm.http.host";
+    public static final String DEFAULT_HOST = "127.0.0.1";
 
     private static volatile HttpServer server;
     private static volatile int boundPort = -1;
@@ -29,15 +33,16 @@ public class StormHttpServer {
             LOGGER.debug("Storm HTTP server already running on port {}", boundPort);
             return;
         }
+        String host = configuredHost();
         try {
-            HttpServer created = HttpServer.create(new InetSocketAddress(port), 0);
+            HttpServer created = HttpServer.create(new InetSocketAddress(host, port), 0);
             created.createContext("/", HttpEndpointDispatcher::dispatch);
             startWithDaemonDispatcher(created);
             server = created;
             boundPort = created.getAddress().getPort();
-            LOGGER.info("Storm HTTP server started on port {}", boundPort);
+            LOGGER.info("Storm HTTP server started on {}:{}", host, boundPort);
         } catch (IOException e) {
-            LOGGER.error("Failed to start Storm HTTP server on port {}", port, e);
+            LOGGER.error("Failed to start Storm HTTP server on {}:{}", host, port, e);
         }
     }
 
@@ -77,6 +82,12 @@ public class StormHttpServer {
 
     public static int getPort() {
         return boundPort;
+    }
+
+    /** Read {@value #HOST_PROPERTY}, or {@value #DEFAULT_HOST} if unset. */
+    public static String configuredHost() {
+        String raw = System.getProperty(HOST_PROPERTY);
+        return raw == null || raw.isBlank() ? DEFAULT_HOST : raw.trim();
     }
 
     /** Read {@value #PORT_PROPERTY} and return the port, or {@code -1} if unset/invalid. */
